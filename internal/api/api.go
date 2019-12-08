@@ -1,30 +1,31 @@
 package api
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 
-	"github.com/graphql-go/graphql"
 	"github.com/graphql-go/handler"
+
+	"github.com/jmoiron/sqlx"
+
+	_ "github.com/lib/pq" // Postgres driver
 )
 
 // Serve serves the andin api over http
 func Serve() {
-	// Schema
-	fields := graphql.Fields{
-		"hello": &graphql.Field{
-			Type: graphql.String,
-			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-				return "world", nil
-			},
-		},
+	dbpass, exists := os.LookupEnv("DB_PASS")
+	if !exists {
+		panic(fmt.Errorf("must set DB_PASS enviroment variable"))
 	}
-	rootQuery := graphql.ObjectConfig{Name: "RootQuery", Fields: fields}
-	schemaConfig := graphql.SchemaConfig{Query: graphql.NewObject(rootQuery)}
-	schema, err := graphql.NewSchema(schemaConfig)
+	connStr := fmt.Sprintf("user=andin_migrate password=%s dbname=andin_dev sslmode=disable", dbpass)
+	db, err := sqlx.Open("postgres", connStr)
 	if err != nil {
-		log.Fatalf("failed to create new schema, error: %v", err)
+		log.Fatal(err)
 	}
+
+	schema := generateSchema(db)
 
 	h := handler.New(&handler.Config{
 		Schema:   &schema,
@@ -33,5 +34,5 @@ func Serve() {
 	})
 
 	http.Handle("/graphql", h)
-	http.ListenAndServe(":8080", nil)
+	http.ListenAndServe(":8980", nil)
 }
